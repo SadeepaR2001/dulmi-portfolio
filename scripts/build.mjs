@@ -1,0 +1,24 @@
+import { readFile, writeFile, mkdir, cp, access } from 'node:fs/promises';
+import { profile, projects, sections } from '../src/content.ts';
+const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tags = items => items.map(item => `<span>${escape(item)}</span>`).join('');
+await mkdir('dist', {recursive:true});
+await cp('public', 'dist', {recursive:true});
+let html = await readFile('src/template.html','utf8');
+html = html.replace(/\{\{section:(\w+)\}\}/g, (_, key) => sections[key]);
+html = html.replace(/\{\{project:(\d+):(\w+)\}\}/g, (_, i, key) => escape(projects[i][key]));
+html = html.replace(/\{\{tags:(\d+)\}\}/g, (_, i) => tags(projects[i].technologies));
+html = html.replace(/\{\{details:(\d+)\}\}/g, (_, i) => projects[i].detailHtml);
+html = html.replace('{{introduction}}',escape(profile.introduction)).replace('{{supportingLine}}',escape(profile.supportingLine));
+for (const [previous,current] of [['Dulmi Hitihamillage',profile.name],['hasaradulmi@gmail.com',profile.email],['https://github.com/DulmiHasara',profile.github],['https://www.linkedin.com/in/dulmi-hasara/',profile.linkedin],['Dulmi-CV.pdf',profile.cv],['dulmi-portrait.webp',profile.portrait]]) html=html.replaceAll(previous,escape(current));
+html=html.replace('SOFTWARE DEVELOPER</p>',`${escape(profile.title.toUpperCase())}</p>`);
+html=html.replace('<h1>Dulmi<br/>Hitihamillage</h1>',`<h1>${escape(profile.name)}</h1>`);
+const exists = async path => {try{await access(`public/${path}`);return true}catch{return false}};
+if(!profile.cv || !await exists(profile.cv)) html=html.replace(/<a\b[^>]*download[^>]*>[\s\S]*?<\/a>/g,'');
+if(!profile.portrait || !await exists(profile.portrait)) {html=html.replace(/<div class="portrait-area">[\s\S]*?<\/div><\/div><\/section>/,'</section>');html=html.replace('class="hero wrap"','class="hero wrap text-only"');}
+const metadata=`<meta property="og:type" content="website"><meta property="og:title" content="${escape(profile.name)} — ${escape(profile.title)}"><meta property="og:description" content="${escape(profile.supportingLine)}"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="${escape(profile.name)} — ${escape(profile.title)}"><meta name="twitter:description" content="${escape(profile.supportingLine)}">`;
+html=html.replace('</head>',`${metadata}</head>`);
+if(html.includes('{{')) throw new Error('Unresolved content placeholder');
+await writeFile('dist/index.html',html);
+await cp('src/style.css','dist/style.css');
+console.log('Production site built in dist/.');
